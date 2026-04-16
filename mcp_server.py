@@ -16,25 +16,31 @@ from typing import Any, Dict, List, Optional
 
 def read_frame() -> Optional[Dict[str, Any]]:
     """Read one LSP-framed JSON-RPC message from stdin."""
-    headers = {}
-    while True:
-        line = sys.stdin.readline()
-        if line == '':
-            return None  # EOF
-        if line.strip() == '':
-            break
-        key, val = line.split(':', 1)
-        headers[key.strip()] = val.strip()
+    # Read header: "Content-Length: N\r\n"
+    header = sys.stdin.readline()
+    if header == '':
+        return None  # Clean EOF
     
-    if 'Content-Length' not in headers:
+    if not header.startswith('Content-Length:'):
+        # Try to recover - maybe we got partial data
         return None
     
-    length = int(headers['Content-Length'])
-    body = sys.stdin.read(length)
+    try:
+        content_length = int(header.split(':')[1].strip())
+    except (ValueError, IndexError):
+        return None
     
+    # Read blank line separator ("\r\n")
+    separator = sys.stdin.readline()
+    
+    # Read body
+    body = sys.stdin.read(content_length)
     try:
         return json.loads(body)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        # Log error but return None to prevent crash
+        sys.stderr.write(f"JSON parse error: {e}\n")
+        sys.stderr.flush()
         return None
 
 def write_frame(msg: Dict[str, Any]):
@@ -49,8 +55,6 @@ def write_frame(msg: Dict[str, Any]):
 import importlib.util
 import pathlib
 
-# Dynamically load FTS5 from skills directory
-# This avoids needing to install the skill as a pip package
 _FTS5_PATH = pathlib.Path(__file__).parent
 
 def _import_fts5():
@@ -155,7 +159,6 @@ def handle_tools_call(msg_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
                 query=arguments.get("query", ""),
                 limit=arguments.get("limit", 5)
             )
-            # Format results as text for the LLM
             output = _format_search_results(results)
             return {
                 "jsonrpc": "2.0",
@@ -261,7 +264,6 @@ def _format_stats(stats: Dict) -> str:
     
     db_path = stats.get('db_path', '')
     if db_path:
-        import os
         size_mb = os.path.getsize(db_path) / (1024*1024) if os.path.exists(db_path) else 0
         lines.append(f"\n資料庫大小：{size_mb:.1f} MB")
     
@@ -274,7 +276,6 @@ def dispatch(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     method = msg.get("method", "")
     msg_id = msg.get("id")
     
-    # Notification (no id) — handle for side effects, no reply
     if msg_id is None:
         return None
     
@@ -294,10 +295,6 @@ def dispatch(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 # ── Main Loop ───────────────────────────────────────────────
 
 def main():
-    # Send initial server info (optional but helpful for debugging)
-    sys.stderr.write("[FTS5 MCP Server] Starting...\n")
-    sys.stderr.flush()
-    
     while True:
         msg = read_frame()
         if msg is None:
