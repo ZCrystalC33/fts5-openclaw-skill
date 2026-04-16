@@ -9,7 +9,16 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-SELF_IMPROVING_DIR = Path.home() / "self-improving"
+# Paths - Support both original ~/self-improving/ and merged ~/.openclaw/skills/fts5/self_improving/
+# Check both locations for backwards compatibility
+_SCRIPT_DIR = Path(__file__).parent
+if (_SCRIPT_DIR.parent / "__init__.py").exists():
+    # Running inside FTS5 repo
+    SELF_IMPROVING_DIR = _SCRIPT_DIR.parent
+else:
+    # Running from original location
+    SELF_IMPROVING_DIR = Path.home() / "self-improving"
+
 INDEX_FILE = SELF_IMPROVING_DIR / "index.md"
 MEMORY_FILE = SELF_IMPROVING_DIR / "memory.md"
 DOMAINS_DIR = SELF_IMPROVING_DIR / "domains"
