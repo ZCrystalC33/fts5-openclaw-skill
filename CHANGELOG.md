@@ -4,6 +4,71 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.0] - 2026-04-16
+
+### 🎉 Agentic Harness Patterns 重構
+
+基於 Claude Code 512,000 行原始碼萃取的生產級設計模式。
+
+#### 雙步儲存 invariant (Two-Step Save Invariant)
+- **核心原則**：寫入 topic file → 再更新 index
+- **原因**：確保崩潰時 index 一致，孤立檔案無害
+- **應用於**：`exchange_engine.py`, `fts5_integration.py`
+
+#### 相互排斥 (Mutual Exclusion)
+- **核心原則**：主代理寫入時，萃取代理跳過
+- **實現**：`ExchangeLock` class，使用 `fcntl` 原子鎖
+- **應用於**：`exchange_engine.py`, `context_predictor.py`
+
+### ✅ 新增功能
+
+#### exchange_engine.py 重構
+- `ExchangeLock` class - 相互排斥鎖
+- `two_step_save()` - 雙步儲存實現
+- `topics/` 目錄 - 存放完整內容（溫層）
+- `memory.md` 緊湊 - 超過 25KB 時自動壓縮
+- `_append_to_memory_index()` - 安全的 index 更新
+- `_compact_memory_index()` -  index 緊湊維護
+
+#### fts5_integration.py 重構
+- `main_agent_lock()` - 主代理寫入鎖
+- `is_main_agent_active()` - 活性檢查
+- `index_correction/preference/learning()` - 現在使用雙步儲存
+- FTS5 logging = Step 1（權威記錄）
+- File update = Step 2（衍生）
+
+#### context_predictor.py 重構
+- `is_main_agent_writing()` - 相互排斥檢查
+- `should_defer` flag - 主代理忙碌時延遲記憶操作
+- Just-in-time context loading（不 eager）
+- 重構後避免在主代理寫入時執行heavy記憶操作
+
+### 📚 知識庫更新
+
+- `domains/harness-engineering.md` - 完整的 Harness Engineering 文章彙整
+- `domains/agentic-harness-patterns.md` - Claude Code 模式深度研究
+- 6 大設計模式：Memory, Skills, Tools, Context Engineering, Multi-agent, Lifecycle
+- 11 個 Deep-dive References 摘要
+
+### 🔧 Technical Details
+
+#### ExchangeLock 實現
+```python
+class ExchangeLock:
+    def __enter__(self):
+        fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Returns False if lock held by main agent
+        return acquired
+```
+
+#### Two-Step Save 實現
+```python
+# Step 1: 寫入 topic file
+write_topic_file(topic_id, content)
+# Step 2: 更新 index
+append_to_memory_index(topic_id, summary)
+```
+
 ## [1.3.0] - 2026-04-16
 
 ### 🎉 Major Improvements
@@ -114,7 +179,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 | Version | Date | Status |
 |---------|------|--------|
-| 1.3.0 | 2026-04-16 | ✅ Current |
+| 1.4.0 | 2026-04-16 | ✅ Current |
+| 1.3.0 | 2026-04-16 | ✅ Previous |
 | 1.2.0 | 2026-04-16 | ✅ Previous |
 | 1.1.0 | 2026-04-15 | ✅ Previous |
 | 1.0.0 | 2026-04-14 | ✅ Initial |
@@ -139,15 +205,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## Statistics (as of v1.3.0)
+## Statistics (as of v1.4.0)
 
-- **Files**: 14
-- **Lines of Code**: ~3,500
-- **Dependencies**: Python stdlib only (urllib, sqlite3, json, re)
+- **Files**: 17+
+- **Lines of Code**: ~4,500
+- **Dependencies**: Python stdlib only (urllib, sqlite3, json, re, fcntl)
 - **Supported Languages**: 4 (zh-TW, zh-CN, en, ja)
 - **Error Recovery Layers**: 3
 - **Linter Checks**: 7 (all passing)
 - **Self-Improving Scripts**: 5
+- **Design Patterns**: 6 (from Agentic Harness Patterns)
+- **Knowledge Domains**: 3 (openclaw-fts5, patterns, harness-engineering)
 
 ## Future Plans
 

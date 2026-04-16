@@ -5,7 +5,7 @@
 > 🤖 Make your AI assistant remember everything — with built-in Self-Improving intelligence.
 
 [![授權：MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![版本](https://img.shields.io/badge/Version-1.3.0-green.svg)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/Version-1.4.0-green.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.7+-blue.svg)](https://www.python.org/)
 
 ---
@@ -37,6 +37,10 @@
 | 🛡️ **Error Recovery** | 3-layer fallback |
 | 🔒 **安全** | 無硬編碼 Key，資料自動遮罩 |
 | 🔒 **Secure** | No hardcoded keys, data auto-masked |
+| 🔐 **雙步儲存** | Topic file → Index，崩潰安全 |
+| 🔐 **Two-Step Save** | Topic file → Index, crash-safe |
+| ⚙️ **相互排斥** | 主代理寫入時萃取跳過 |
+| ⚙️ **Mutual Exclusion** | Skip extraction when main agent writes |
 
 ---
 
@@ -78,11 +82,20 @@ openclaw gateway restart
 
 | 檔案 File | 等級 Level | 功能 Purpose |
 |-----------|------------|--------------|
-| `context_predictor.py` | P1 | 分析文字 → 預測話題意圖 | Analyze text → predict topics/intents |
+| `context_predictor.py` | P1 | 分析文字 → 預測話題意圖（含相互排斥）| Analyze text → predict topics/intents (w/ mutual exclusion) |
 | `reindex.py` | P1 | 自動更新索引 | Auto-update `index.md` |
-| `exchange_engine.py` | P2 | 冷/熱層自動交換 | Cold/Hot layer auto-exchange |
+| `exchange_engine.py` | P2 | 冷/熱層自動交換（雙步儲存）| Cold/Hot layer auto-exchange (Two-Step Save) |
 | `exchange-cron.sh` | P2 | Cron 鉤子（每天 3 AM）| Cron hook (3 AM daily) |
-| `fts5_integration.py` | P3 | 雙向同步 | Bidirectional FTS5 ↔ memory sync |
+| `fts5_integration.py` | P3 | 雙向同步（雙步儲存 + 主代理鎖）| Bidirectional sync (Two-Step Save + Main Agent Lock) |
+
+### 知識庫 | Knowledge Base
+
+| 檔案 File | 內容 Content |
+|-----------|-------------|
+| `domains/openclaw-fts5.md` | FTS5 架構與模式 |
+| `domains/patterns.md` | 壞味道註冊表 |
+| `domains/harness-engineering.md` | Harness Engineering 文章彙整 |
+| `domains/agentic-harness-patterns.md` | Claude Code 模式深度研究 |
 
 ---
 
@@ -121,8 +134,18 @@ print(analysis['suggested_memory_load'])  # ['fts5:recent', 'domains/fts5']
 | 層級 Layer | 位置 Location | 條件 Trigger |
 |------------|---------------|--------------|
 | **熱 Hot** | `memory.md` | 7 天內引用 | < 7 days referenced |
-| **溫 Warm** | `domains/` | 3+ 引用 | 3+ references |
+| **溫 Warm** | `topics/` | 3+ 引用 | 3+ references |
 | **冷 Cold** | `archive/` | 30+ 天未引用 | 30+ days unreferenced |
+
+### 雙步儲存 invariant
+
+```
+Step 1: 寫入 topic file → topics/{id}.md
+Step 2: 更新 memory.md index
+
+崩潰時：index 一致（不指向不存在的檔案）
+孤立檔案：無害
+```
 
 ---
 
