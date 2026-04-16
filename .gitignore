@@ -3,3 +3,16 @@ __pycache__/
 .git/
 fts5.db
 indexer_state.json
+
+# Self-Improving
+__pycache__/
+*.pyc
+.git/
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist/
+build/
