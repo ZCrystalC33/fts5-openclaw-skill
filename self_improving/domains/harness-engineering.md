@@ -9,9 +9,6 @@
 - 明確意圖
 - 建立回饋迴路
 
-不是：
-- 親自寫程式碼
-
 ---
 
 ## 關鍵文章
@@ -24,96 +21,89 @@
 
 - 傳統：磚塊式建築（Jenga）
 - 新做法：Loop — 不斷循環，失敗了就丟回輪上重做
-- 工程師的角色變成「設計循環」而不是「寫 code」
-
-**對我們的啟示：**
-- FTS5 的 exchange_engine.py 就是這種概念的體現
-- 壞味道 → 自動修復 → 再驗證
 
 ---
 
 ### 2. ARCHITECTURE.md 指南
 **URL:** https://matklad.github.io/2021/02/06/ARCHITECTURE.md.html
 
-**核心概念：**
-- 讓新進者快速理解架構的高層次文件
-- 不要太詳細，只記錄不容易變動的部分
-- 回答：「哪裡有這個功能？」+ 「這個程式在做什麼？」
-
-**對我們的啟示：**
-- FTS5 已有 `ARCHITECTURE.md`
-- 保持簡短，半年檢視一次
+**核心概念：** 高層次文件，只記錄不容易變動的部分
 
 ---
 
 ### 3. Parse, Don't Validate
 **URL:** https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/
 
-**核心概念：**
-> 在邊界解析數據，不要在各地重複驗證
-
-**例子：**
-```python
-# ❌ 傳統做法
-def get_head(lst):
-    if not lst:
-        raise ValueError("empty")
-    return lst[0]
-
-# 在 main 裡還要再檢查一次
-
-# ✅ 使用強類型，類型系統保證不可能為空
-# NonEmpty type 只在 construction 時驗證一次
-```
-
-**對我們的啟示：**
-- 在 indexer 入口做一次驗證
-- 之後的處理不需要重複檢查
+**核心概念：** 在邊界解析數據，不要在各地重複驗證
 
 ---
 
 ### 4. AI Is Forcing Us To Write Good Code
 **URL:** https://bits.logic.inc/p/ai-is-forcing-us-to-write-good-code
 
-**核心概念：**
-
-| 傳統做法 | Agent 時代做法 |
-|---------|--------------|
-| 測試可選 | **100% 覆蓋率** |
-| 大檔案 | **多個小檔案** |
-| 慢品質檢查 | **快速 guardrails** |
-| 手動重啟環境 | **自動化 worktree** |
-
-**關鍵洞察：**
-- 95% 覆蓋率 vs **100% 覆蓋率** — 到 100% 有相位變化
-- 覆蓋率報告變成簡單的 TODO 列表
-- **目錄結構 = 介面** — 幫 AI 理解你的程式碼
+**核心概念：** 100% 覆蓋率、目录结构 = 介面、快速 guardrails
 
 ---
 
-## Harness Engineering 實踐清單
+## ⭐ Agentic Harness Patterns（重要！）
 
-### 環境設計
-- [x] 明確的目錄結構
-- [x] 單一職責的檔案
-- [x] 清晰的命名
-- [ ] 自動化環境設定腳本
+**URL:** https://github.com/keli-wen/agentic-harness-patterns-skill
 
-### 回饋迴路
-- [x] linter.py 強制架構
-- [x] exchange_engine.py 持續維護
-- [ ] doc-gardening agent（自動更新文件）
+從 Claude Code 512,000 行原始碼分析萃取的生產級設計模式。
 
-### 驗證與品質
-- [x] 路徑檢測一致性
-- [x] 層級依賴檢查
-- [x] Script 權限檢查
-- [ ] 單元測試覆蓋
+### 6 大設計模式章節
 
-### 知識管理
-- [x] AGENTS.md 是目錄
-- [x] 領域知識在 domains/
-- [x] Pattern Registry 壞味道集中管理
+| # | Pattern | 解決的問題 |
+|---|---------|-----------|
+| 1 | **Memory** | 「代理每個 session 都忘記一切」 |
+| 2 | **Skills** | 「每個對話都要重新解釋工作流程」 |
+| 3 | **Tools & Safety** | 「我想要強大但安全的工具」 |
+| 4 | **Context Engineering** | 「代理看到太多/太少/錯誤的內容」 |
+| 5 | **Multi-agent** | 「我需要平行但不混亂」 |
+| 6 | **Lifecycle** | 「我需要 hooks、背景任務、啟動順序」 |
+
+### 11 深度參考文檔
+
+| Reference | 內容 |
+|----------|------|
+| `memory-persistence-pattern` | 四層指令階層、背景萃取 with mutual exclusion |
+| `skill-runtime-pattern` | 四源發現、YAML frontmatter contract |
+| `tool-registry-pattern` | Fail-closed builder、per-call concurrency |
+| `permission-gate-pattern` | 單一 gate、三種行為 |
+| `agent-orchestration-pattern` | Coordinator/Fork/Swarm 三模式 |
+| `context-engineering` | Index → select/compress/isolate |
+| `select-pattern` | 三層漸進揭露、手動快取失效 |
+| `compress-pattern` | Truncation + recovery pointers |
+| `isolate-pattern` | Zero-inheritance、worktree-based 隔離 |
+| `hook-lifecycle-pattern` | 單一 dispatch、六種 hook 類型 |
+| `task-decomposition-pattern` | Typed prefixed IDs、嚴格狀態機 |
+
+### 安裝方式
+
+```bash
+npx skills add github:keli-wen/agentic-harness-patterns-skill
+```
+
+---
+
+## Context Engineering 四大操作
+
+| 操作 | 說明 |
+|------|------|
+| **Select** | Just-in-time loading，延遲載入 |
+| **Write** | 學習循環，寫入記憶 |
+| **Compress** | 反應式壓縮 |
+| **Isolate** | 委託邊界 |
+
+---
+
+## Multi-Agent 三種模式
+
+| 模式 | 特性 |
+|------|------|
+| **Coordinator** | 零繼承、必須綜合理解，不是只委託 |
+| **Fork** | 完全繼承、單層 |
+| **Swarm** | 平面 peer roster |
 
 ---
 
@@ -121,20 +111,31 @@ def get_head(lst):
 
 | 原則 | 現狀 | 目標 |
 |------|------|------|
+| Memory 持久化 | ✅ FTS5 DB | 四層階層 |
+| Skills 發現 | ❌ 需手動 | Lazy-loaded |
+| Context Engineering | ✅ 基本 | Select/Compress/Isolate |
+| Multi-Agent | ❌ | Coordinator/Fork/Swarm |
+| Lifecycle Hooks | ❌ | 六種 hook 類型 |
 | 100% 覆蓋率 | 0% | 有單元測試 |
-| 快速 guardrails | linter OK | < 5 秒執行 |
-| doc-gardening | 手動 | 自動化 |
-| 自動化環境 | 需手動 | `setup.py` |
 
 ---
 
 ## 參考連結
 
+### Harness Engineering
 1. [Ralph Wiggum Loop](https://ghuntley.com/loop/)
 2. [ARCHITECTURE.md Guide](https://matklad.github.io/2021/02/06/ARCHITECTURE.md.html)
 3. [Parse, Don't Validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
 4. [AI Is Forcing Us To Write Good Code](https://bits.logic.inc/p/ai-is-forcing-us-to-write-good-code)
-5. [Cookbook - Codex Exec Plans](https://cookbook.openai.com/articles/codex_exec_plans)
+
+### Agentic Harness Patterns（⭐）
+5. [Agentic Harness Patterns Repo](https://github.com/keli-wen/agentic-harness-patterns-skill)
+6. [Anthropic: Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
+7. [Claude Code Source](https://github.com/anthropics/claude-code)
+
+### Context Engineering
+8. [One Poem Suffices - Context Engineering](https://keli-wen.github.io/One-Poem-Suffices/one-poem-suffices/context-engineering/)
+9. [Just-in-Time Context](https://keli-wen.github.io/One-Poem-Suffices/one-poem-suffices/just-in-time-context/)
 
 ---
 
