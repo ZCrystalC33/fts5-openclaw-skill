@@ -1,145 +1,166 @@
-# FTS5 OpenClaw Skill
+# FTS5 - Full-Text Search for OpenClaw
 
-SQLite FTS5 full-text search with LLM summarization for OpenClaw conversations.
+SQLite FTS5 full-text search with LLM-powered summarization for OpenClaw conversations.
 
-## Features
+[中文說明](./README_zh.md)
 
-- 🔍 **FTS5 Full-Text Search** - Instant search across all conversation history
-- 🤖 **LLM Summarization** - Automatic summary generation with MiniMax
-- 🌐 **Multi-Language** - Supports Traditional Chinese, Simplified Chinese, English, Japanese
-- 🔒 **Sensitive Data Filter** - Auto-masks API keys, tokens, private keys
-- ⚡ **Rate Limiting** - Protects API from overuse (10 calls/min)
-- 🛡️ **Error Recovery** - 3-layer fallback on API failure
-- 📊 **Context Management** - Auto-adjusts based on query complexity
-- 🔄 **Incremental Indexing** - Only processes changed session files
+## 🎯 What is FTS5?
 
-## Installation
+FTS5 enables your OpenClaw AI assistant to search and summarize past conversations. It uses SQLite's FTS5 (Full-Text Search) engine to index messages and combines with LLM (MiniMax) to generate meaningful summaries.
 
-### 1. Clone the repository
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 🔍 **Full-Text Search** | Instant search across all conversation history |
+| 🤖 **LLM Summarization** | Automatic summary generation in your language |
+| 🌍 **Multi-Language** | Supports zh-TW, zh-CN, en, ja |
+| 🔒 **Sensitive Data Filter** | Auto-masks API keys, tokens, private keys |
+| ⚡ **Rate Limiting** | Protects API (10 calls/min max) |
+| 🛡️ **Error Recovery** | 3-layer fallback on API failure |
+| 📊 **Smart Context** | Auto-adjusts based on query complexity |
+| 🔄 **Incremental Indexing** | Only processes changed session files |
+
+## 📦 Installation
+
+### Prerequisites
+
+- Python 3.7+
+- SQLite3 (built into Python)
+- MiniMax API Key ([Get one here](https://platform.minimax.io/))
+
+### Steps
 
 ```bash
+# 1. Clone the repository
 git clone https://github.com/kiwi760303/fts5-openclaw-skill.git ~/.openclaw/skills/fts5
-```
 
-### 2. Setup configuration
-
-```bash
-# Copy example config
+# 2. Copy and edit configuration
 cp ~/.openclaw/skills/fts5/config.env.example ~/.openclaw/fts5.env
+nano ~/.openclaw/fts5.env  # Add your MINIMAX_API_KEY
 
-# Edit and add your MiniMax API key
-nano ~/.openclaw/fts5.env
-# MINIMAX_API_KEY=sk-cp-your-actual-key-here
-```
-
-### 3. Run onboarding (interactive setup)
-
-```bash
+# 3. Run onboarding (recommended)
 python3 ~/.openclaw/skills/fts5/setup.py
-```
 
-This will verify your API key and test connectivity.
-
-### 4. Index existing conversations
-
-```bash
+# 4. Index existing conversations (optional)
 python3 ~/.openclaw/skills/fts5/indexer.py
 ```
 
-## Usage
+## ⚙️ Configuration
 
-### Simple Search
+### API Key Setup
+
+**Option A: Environment Variable (Recommended)**
+```bash
+export MINIMAX_API_KEY=sk-cp-your-key-here
+```
+
+**Option B: Config File**
+```bash
+# Edit ~/.openclaw/fts5.env
+MINIMAX_API_KEY=sk-cp-your-key-here
+```
+
+### Priority Order
+1. `MINIMAX_API_KEY` environment variable
+2. `~/.openclaw/fts5.env` config file  
+3. `~/.openclaw/config.json` (fts5.api_key)
+
+## 🚀 Quick Usage
 
 ```python
-from skills.fts5 import search
+# Simple search
+from skills.fts5 import search, summarize
 
+# Search for messages
 results = search("Discord Bot", limit=5)
-for r in results:
-    print(f"{r['timestamp']}: {r['content'][:100]}")
-```
 
-### Search with LLM Summary
+# LLM-powered summary
+result = summarize("上次討論的內容")
+print(result['summary'])
 
-```python
-from skills.fts5 import summarize
-
-result = summarize("Discord Bot")
-print(result['summary'])  # LLM-generated summary
-```
-
-### Statistics
-
-```python
+# Get statistics
 from skills.fts5 import get_stats
-
 stats = get_stats()
 print(f"Total messages: {stats['total']}")
 ```
 
-## Workflow Integration
+## 🔧 Module Reference
 
-When user asks about past conversations:
+| Function | Description |
+|----------|-------------|
+| `search(query, limit)` | FTS5 full-text search |
+| `summarize(query, limit)` | Search + LLM summary |
+| `add_message(...)` | Add message to index |
+| `get_recent(limit)` | Get recent messages |
+| `get_stats()` | Database statistics |
 
-1. User: "我們上次討論的 Discord Bot 怎麼樣了？"
-2. Agent: `result = summarize("Discord Bot")`
-3. Agent: Display `result['summary']` + relevant references
+## 🌐 Multi-Language Support
 
-## Configuration
+FTS5 auto-detects your query language and uses appropriate prompts:
 
-### API Key Priority
+| Language | Code | Detection |
+|----------|------|-----------|
+| 繁體中文 | `zh-TW` | 開/龍/體 characters |
+| 簡體中文 | `zh-CN` | 开/龙/体 characters |
+| English | `en` | Default |
+| 日本語 | `ja` | Hiragana/Katakana |
 
-1. `MINIMAX_API_KEY` environment variable (highest)
-2. `~/.openclaw/fts5.env` config file
-3. `~/.openclaw/config.json` (fts5.api_key)
+## 🛡️ Error Handling
 
-### Get MiniMax API Key
+FTS5 has 3-layer error recovery:
 
-Visit [https://platform.minimax.io/](https://platform.minimax.io/) to get your API key.
+1. **Normal**: Try LLM API call
+2. **Retry**: Wait 5-10s and retry once
+3. **Fallback**: Use template-based summary
 
-## File Structure
+No API key? Shows setup instructions instead of crashing.
+
+## 📁 File Structure
 
 ```
 fts5/
-├── __init__.py           # Main module (search, summarize, add_message)
-├── llm_summary.py        # LLM summarization with multi-language prompts
-├── rate_limiter.py       # Rate limiting (10 calls/min)
-├── error_handling.py     # 3-layer error recovery
-├── indexer.py            # Incremental session indexer
-├── sensitive_filter.py   # Sensitive data masking
-├── setup.py              # Interactive onboarding setup
-├── config.env.example    # Example configuration
-├── SKILL.md             # OpenClaw skill definition
-└── README.md            # This file
+├── __init__.py           # Main module
+├── llm_summary.py         # LLM + multi-language prompts
+├── rate_limiter.py        # 10 calls/min limit
+├── error_handling.py      # 3-layer fallback
+├── indexer.py             # Session indexer
+├── sensitive_filter.py    # Data masking
+├── setup.py               # Onboarding wizard
+├── config.env.example     # Example config
+├── SKILL.md              # OpenClaw skill file
+└── README.md             # This file
 ```
 
-## Requirements
+## 🔒 Security
 
-- Python 3.7+
-- SQLite3 (built-in with Python)
-- Internet connection (for MiniMax API)
+- **No hardcoded credentials** - All API keys are user-provided
+- **Sensitive data masking** - Auto-hides API keys, tokens, private keys
+- **Incremental indexing** - Only processes new/modified files
 
-## Troubleshooting
+## 📄 License
 
-### "MINIMAX_API_KEY not found"
+MIT License - See [LICENSE](./LICENSE) file.
 
+## 🐛 Troubleshooting
+
+**"MINIMAX_API_KEY not found"**
 ```bash
-# Run setup
 python3 ~/.openclaw/skills/fts5/setup.py
-
-# Or manually set environment variable
-export MINIMAX_API_KEY=sk-cp-your-key
 ```
 
-### "API connection failed"
-
-1. Check API key is correct
+**"API connection failed"**
+1. Check your API key is correct
 2. Verify internet connection
 3. Run setup to test: `python3 ~/.openclaw/skills/fts5/setup.py`
 
-## License
+## 🙏 Acknowledgments
 
-MIT License - See LICENSE file for details.
+- Built for [OpenClaw](https://github.com/openclaw/openclaw) AI assistant framework
+- Uses [MiniMax](https://platform.minimax.io/) for LLM capabilities
+- Powered by SQLite FTS5 full-text search engine
 
-## Author
+---
 
-Ophelia Prime (OpenClaw AI Assistant)
+**Version:** 1.2.0  
+**Last Updated:** 2026-04-16
