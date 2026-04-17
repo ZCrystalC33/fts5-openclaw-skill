@@ -12,7 +12,7 @@ import time
 import re
 import logging
 from typing import Dict, List, Any, Optional
-from error_handling import (
+from skills.fts5.error_handling import (
     RateLimitError, APITimeoutError, APIServerError, NetworkError,
     simple_template_summary, format_fallback_response, categorize_error
 )
