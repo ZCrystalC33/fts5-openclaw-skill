@@ -25,6 +25,8 @@ from typing import Optional, List, Dict, Any, Tuple, Callable
 
 DB_PATH = os.path.expanduser("~/.openclaw/fts5.db")
 SETUP_FILE = os.path.expanduser("~/.openclaw/fts5.env")
+CREDENTIALS_DIR = os.path.expanduser("~/.openclaw/credentials")
+CREDENTIAL_FILE = os.path.join(CREDENTIALS_DIR, "minimax.key")
 CONFIG_FILE = os.path.expanduser("~/.openclaw/config.json")
 
 
@@ -35,14 +37,25 @@ CONFIG_FILE = os.path.expanduser("~/.openclaw/config.json")
 def _bootstrap_load_api_key() -> str:
     """
     Bootstrap: Load API key with priority order.
-    Step 1: Environment → Step 2: fts5.env → Step 3: config.json
+    Priority:
+      1. Environment variable (MINIMAX_API_KEY)
+      2. ~/.openclaw/credentials/minimax.key (standard location)
+      3. ~/.openclaw/fts5.env (legacy location)
+      4. ~/.openclaw/config.json (OpenClaw config)
     """
     # Priority 1: Environment variable
     api_key = os.environ.get("MINIMAX_API_KEY")
     if api_key:
         return api_key
     
-    # Priority 2: fts5.env
+    # Priority 2: Standard credentials location
+    if os.path.exists(CREDENTIAL_FILE):
+        with open(CREDENTIAL_FILE, 'r') as f:
+            key = f.read().strip()
+            if key and len(key) > 20:
+                return key
+    
+    # Priority 3: fts5.env (legacy location)
     if os.path.exists(SETUP_FILE):
         with open(SETUP_FILE, 'r') as f:
             for line in f:
@@ -51,7 +64,8 @@ def _bootstrap_load_api_key() -> str:
                     if key and key != "sk-cp-YOUR_KEY_HERE":
                         return key
     
-    # Priority 3: config.json
+    # Priority 4: config.json
+    CONFIG_FILE = os.path.expanduser("~/.openclaw/config.json")
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:
@@ -62,9 +76,10 @@ def _bootstrap_load_api_key() -> str:
             pass
     
     raise ValueError(
-        "MINIMAX_API_KEY not found. Please set up FTS5:\n"
+        "MINIMAX_API_KEY not found. Please set up PFSI:\n"
         "  1. Run: python3 ~/.openclaw/skills/fts5/setup.py\n"
-        "  2. Or set environment variable: export MINIMAX_API_KEY=sk-cp-xxx"
+        "  2. Or create: ~/.openclaw/credentials/minimax.key with your API key\n"
+        "  3. Or set environment variable: export MINIMAX_API_KEY=sk-cp-xxx"
     )
 
 

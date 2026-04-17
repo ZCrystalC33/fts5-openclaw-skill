@@ -56,8 +56,20 @@ git clone https://github.com/ZCrystalC33/openclaw-pfsi.git ~/.openclaw/skills/pf
 cd ~/.openclaw/skills/pfsi
 
 # 2. 設定 | Configure
+
+**Standard Location (Recommended):**
+```bash
+mkdir -p ~/.openclaw/credentials
+# 將您的 API Key 寫入標準位置
+echo "sk-cp-your-key" > ~/.openclaw/credentials/minimax.key
+chmod 600 ~/.openclaw/credentials/minimax.key
+```
+
+**Legacy Location (Alternative):**
+```bash
 cp config.env.example ~/.openclaw/fts5.env
 nano ~/.openclaw/fts5.env  # 填入 MINIMAX_API_KEY
+```
 
 # 3. 安裝 | Install
 python3 setup.py
