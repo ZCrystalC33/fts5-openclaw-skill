@@ -285,8 +285,8 @@ def add_message(
     Returns:
         Row ID of inserted message, or 0 if filtered
     """
-    # FIX: Skip noise content markers
-    if content == "[SKIP]" or _is_noise_content(content):
+    # Skip [SKIP] markers from indexer's _extract_content
+    if content == "[SKIP]":
         return 0
 
     # Check for sensitive data (canonical check)
