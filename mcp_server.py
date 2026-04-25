@@ -9,6 +9,7 @@ Version: 2025-03-26 (matches Claw Code MCP)
 
 import json
 import sys
+import time
 import os
 from typing import Any, Dict, List, Optional
 
@@ -39,7 +40,8 @@ def read_frame() -> Optional[Dict[str, Any]]:
         return json.loads(body)
     except json.JSONDecodeError as e:
         # Log error but return None to prevent crash
-        sys.stderr.write(f"JSON parse error: {e}\n")
+        sys.stderr.write(f"[FTS5] JSON parse error: {e}\n")
+        sys.stderr.flush()
         sys.stderr.flush()
         return None
 
@@ -295,6 +297,9 @@ def dispatch(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 # ── Main Loop ───────────────────────────────────────────────
 
 def main():
+    # Signal ready for MCP handshake
+    sys.stderr.write("[FTS5] MCP server starting...\n")
+    sys.stderr.flush()
     while True:
         msg = read_frame()
         if msg is None:

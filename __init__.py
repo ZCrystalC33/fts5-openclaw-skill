@@ -285,9 +285,10 @@ def add_message(
     Returns:
         Row ID of inserted message, or 0 if filtered
     """
-    if not content or not content.strip():
+    # FIX: Skip noise content markers
+    if content == "[SKIP]" or _is_noise_content(content):
         return 0
-    
+
     # Check for sensitive data (canonical check)
     is_sensitive = False
     if not skip_sensitive_filter:
@@ -382,6 +383,14 @@ def search(query: str, limit: int = 10, channel: Optional[str] = None,
     
     # Apply user's limit
     return pruned_results[:limit]
+
+
+async def search_async(query: str, limit: int = 10, channel: Optional[str] = None,
+                       complexity: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Async wrapper for search() - runs SQLite search in thread pool."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, search, query, limit, channel, complexity)
 
 
 def get_recent(limit: int = 20, channel: Optional[str] = None) -> List[Dict[str, Any]]:

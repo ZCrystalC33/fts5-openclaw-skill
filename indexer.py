@@ -22,6 +22,32 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from skills.fts5 import init_db, add_message, get_stats, search
 
+# Lazy-load Honcho client to avoid import errors when Honcho is unavailable
+_honcho_client = None
+
+def _get_honcho_client():
+    global _honcho_client
+    if _honcho_client is None:
+        try:
+            from skills.fts5.honcho_client import HonchoClient
+            _honcho_client = HonchoClient()
+        except Exception:
+            return None
+    return _honcho_client
+
+def _push_to_honcho(peer: str, session_key: str, content: str, message_id: str):
+    """Push message to Honcho for semantic indexing (best-effort)."""
+    try:
+        hc = _get_honcho_client()
+        if hc is None:
+            return
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(
+            hc.add_message(peer, session_key, content, {"message_id": message_id})
+        )
+    except Exception:
+        pass  # Best-effort, don't fail indexing if Honcho is unavailable
+
 # ============================================================
 # PATHS - Bootstrap Sequence: config parsing before use
 # ============================================================
@@ -185,15 +211,23 @@ def import_session_with_checkpoint(filepath: str, force: bool = False, state: Di
                     if event.get('type') == 'message':
                         msg = event.get('message', {})
                         if msg.get('role') in ('user', 'assistant'):
+                            msg_id = event.get('id')
+                            content = _extract_content(msg)
+                            peer = msg.get('role')
+                            
                             add_message(
-                                sender=msg.get('role'),
-                                sender_label=msg.get('role'),
-                                content=_extract_content(msg),
+                                sender=peer,
+                                sender_label=peer,
+                                content=content,
                                 channel=event.get('metadata', {}).get('channel', 'unknown'),
                                 session_key=session_id,
-                                message_id=event.get('id'),
+                                message_id=msg_id,
                                 timestamp=event.get('timestamp')
                             )
+                            
+                            # Push to Honcho for semantic search (best-effort)
+                            _push_to_honcho(peer, session_id, content, msg_id)
+                            
                             count += 1
                             
                             # Checkpoint every batch size
@@ -232,6 +266,29 @@ def import_session_with_checkpoint(filepath: str, force: bool = False, state: Di
     return count, True, None
 
 
+# Noise content patterns to skip during indexing
+SKIP_PATTERNS = [
+    'NO_REPLY',
+    'HEARTBEAT_OK',
+    '[[empty]]',
+    '[empty]',
+    'Conversation info (untrusted metadata)',
+    'Sender (untrusted metadata)',
+    'Replied message (untrusted',
+    'System (untrusted):',
+    '[[Queued messages while',
+]
+
+def _is_noise_content(content: str) -> bool:
+    """Check if content should be skipped (noise/system)."""
+    if not content or not content.strip():
+        return True
+    for pattern in SKIP_PATTERNS:
+        if pattern in content:
+            return True
+    return False
+
+
 def _extract_content(msg: Dict) -> str:
     """Extract content from message."""
     content_list = msg.get('content', [])
@@ -245,7 +302,11 @@ def _extract_content(msg: Dict) -> str:
                     content += f"[tool: {item.get('toolUseId', 'unknown')}] "
             elif isinstance(item, str):
                 content += item
-    return content.strip() or "[empty]"
+    result = content.strip()
+    # FIX: Skip noise content during indexing
+    if _is_noise_content(result):
+        return "[SKIP]"  # Marker for add_message to detect and skip
+    return result
 
 
 def _save_checkpoint(session_id: str, last_line: int, batch: int):
