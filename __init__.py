@@ -310,6 +310,14 @@ def add_message(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (sender, sender_label, content, channel, session_key, message_id, timestamp, is_sensitive))
     
+    # Deduplication guard: if same (sender, content, session_key) exists, keep only newest
+    # This prevents duplicate rows when same message is indexed multiple times
+    if sender and content and session_key:
+        cursor.execute("""
+            DELETE FROM conversations 
+            WHERE sender = ? AND content = ? AND session_key = ? AND rowid < last_insert_rowid()
+        """, (sender, content, session_key))
+    
     row_id = cursor.lastrowid
     conn.commit()
     conn.close()
