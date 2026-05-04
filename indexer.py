@@ -316,18 +316,14 @@ def infer_channel_from_filepath(filepath: str) -> str:
     return 'cli'
 
 
-def _is_noise_content(content: str) -> bool:
-    """Check if content should be skipped (noise/system)."""
-    if not content or not content.strip():
-        return True
-    for pattern in SKIP_PATTERNS:
-        if pattern in content:
-            return True
-    return False
-
-
 def _extract_content(msg: Dict) -> str:
-    """Extract content from message."""
+    """
+    Extract content from message, stripping metadata headers.
+    
+    Handles Telegram format:
+    - 'Conversation info (untrusted metadata): ```json {...} ```\n\n[actual content]'
+    - 'Sender (untrusted metadata): ```json {...} ```\n\n[actual content]'
+    """
     content_list = msg.get('content', [])
     content = ""
     if isinstance(content_list, list):
@@ -339,11 +335,100 @@ def _extract_content(msg: Dict) -> str:
                     content += f"[tool: {item.get('toolUseId', 'unknown')}] "
             elif isinstance(item, str):
                 content += item
+    
+    # Strip metadata headers that OpenClaw prepends to messages
+    # These are NOT part of the actual user/assistant message
+    content = _strip_metadata_headers(content)
+    
     result = content.strip()
-    # FIX: Skip noise content during indexing
-    if _is_noise_content(result):
+    
+    # Skip only if purely noise (not if it just starts with noise prefix)
+    if _is_pure_noise(result):
         return "[SKIP]"  # Marker for add_message to detect and skip
     return result
+
+
+METADATA_PREFIXES = [
+    'Conversation info (untrusted metadata):',
+    'Sender (untrusted metadata):',
+    'Replied message (untrusted',
+    'System (untrusted):',
+    '[[Queued messages while',
+]
+
+def _strip_metadata_headers(content: str) -> str:
+    """
+    Strip OpenClaw metadata headers from content, keeping actual message.
+    
+    Example input:
+    'Conversation info (untrusted metadata):\n```json\n{"message_id": "123"}\n```\n\n實際的用戶訊息內容'
+    
+    Example output:
+    '實際的用戶訊息內容'
+    """
+    if not content:
+        return content
+    
+    result = content
+    for prefix in METADATA_PREFIXES:
+        if result.startswith(prefix):
+            # Find the end of the metadata block (```json ... ```)
+            # and strip everything before actual content
+            idx = result.find('```')
+            if idx >= 0:
+                # Find closing ```
+                end_idx = result.find('```', idx + 3)
+                if end_idx >= 0:
+                    # Skip past the code block and any newlines
+                    result = result[end_idx + 3:]
+                    # Strip leading/trailing whitespace and newlines
+                    result = result.lstrip('\n').rstrip()
+                    break
+            else:
+                # No code block, try to find double newline
+                idx = result.find('\n\n')
+                if idx >= 0:
+                    result = result[idx + 2:].lstrip('\n').rstrip()
+                    break
+                else:
+                    # No recognized pattern, strip the prefix only
+                    result = result[len(prefix):].strip()
+    
+    return result
+
+
+def _is_pure_noise(content: str) -> bool:
+    """
+    Check if content is purely noise (no actual message).
+    
+    Returns True only for:
+    - Empty content
+    - Exact noise patterns (HEARTBEAT_OK, NO_REPLY, etc.)
+    - Content that is ONLY metadata prefix with no actual message
+    """
+    if not content or not content.strip():
+        return True
+    
+    # Exact match noise patterns
+    pure_noise = ['NO_REPLY', 'HEARTBEAT_OK', '__KEEPALIVE__', '[[empty]]', '[empty]']
+    if content.strip() in pure_noise:
+        return True
+    
+    # Check if content is only metadata prefix (no actual message after)
+    stripped = content.strip()
+    for prefix in ['Conversation info', 'Sender (untrusted', 'System (untrusted']:
+        if stripped.startswith(prefix) and len(stripped) < 200:
+            # Check if there's any actual content after the metadata
+            # If the content is mostly metadata, consider it noise
+            if '```' in content:
+                # Has code block - check if there's content after it
+                parts = content.split('```')
+                if len(parts) >= 3:
+                    after = parts[-1].strip()
+                    if not after or len(after) < 10:
+                        return True
+    
+    return False
 
 
 def _save_checkpoint(session_id: str, last_line: int, batch: int):
