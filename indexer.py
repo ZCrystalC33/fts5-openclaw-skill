@@ -215,11 +215,14 @@ def import_session_with_checkpoint(filepath: str, force: bool = False, state: Di
                             content = _extract_content(msg)
                             peer = msg.get('role')
                             
+                            # Infer channel from filepath for accuracy
+                            inferred_channel = infer_channel_from_filepath(filepath)
+                            
                             add_message(
                                 sender=peer,
                                 sender_label=peer,
                                 content=content,
-                                channel=event.get('metadata', {}).get('channel', 'unknown'),
+                                channel=event.get('metadata', {}).get('channel', inferred_channel),
                                 session_key=session_id,
                                 message_id=msg_id,
                                 timestamp=event.get('timestamp')
@@ -278,6 +281,40 @@ SKIP_PATTERNS = [
     'System (untrusted):',
     '[[Queued messages while',
 ]
+
+# ============================================================
+# CHANNEL INFERENCE - From Session Path
+# ==========================================================
+
+def infer_channel_from_filepath(filepath: str) -> str:
+    """
+    Infer channel from session filepath.
+    
+    Args:
+        filepath: Path to session file (e.g., /path/to/xxx.jsonl)
+    
+    Returns:
+        Channel string: 'telegram', 'discord', 'cli', etc.
+    """
+    filepath_lower = filepath.lower()
+    
+    # Known channel indicators in path
+    if 'telegram' in filepath_lower:
+        return 'telegram'
+    if 'discord' in filepath_lower:
+        return 'discord'
+    if 'whatsapp' in filepath_lower or 'wa_' in filepath_lower:
+        return 'whatsapp'
+    
+    # Checkpoint/sessions directories often indicate the source
+    if '/agents/' in filepath_lower:
+        # Agent sessions - check parent directory for channel
+        if '/main/' in filepath_lower:
+            return 'cli'  # Default for main agent
+    
+    # Default to 'cli' for local/workspace sessions
+    return 'cli'
+
 
 def _is_noise_content(content: str) -> bool:
     """Check if content should be skipped (noise/system)."""
