@@ -360,39 +360,50 @@ def _strip_metadata_headers(content: str) -> str:
     """
     Strip OpenClaw metadata headers from content, keeping actual message.
     
-    Example input:
-    'Conversation info (untrusted metadata):\n```json\n{"message_id": "123"}\n```\n\n實際的用戶訊息內容'
+    Handles messages with MULTIPLE metadata headers:
+    - 'Conversation info (untrusted metadata): ```json {...} ```\n\nSender (untrusted metadata): ```json {...} ```\n\n[actual content]'
+    - 'Sender (untrusted metadata): ```json {...} ```\n\n[actual content]'
     
-    Example output:
-    '實際的用戶訊息內容'
+    Returns the actual message content after all headers are stripped.
     """
     if not content:
         return content
     
     result = content
-    for prefix in METADATA_PREFIXES:
-        if result.startswith(prefix):
-            # Find the end of the metadata block (```json ... ```)
-            # and strip everything before actual content
-            idx = result.find('```')
-            if idx >= 0:
-                # Find closing ```
-                end_idx = result.find('```', idx + 3)
-                if end_idx >= 0:
-                    # Skip past the code block and any newlines
-                    result = result[end_idx + 3:]
-                    # Strip leading/trailing whitespace and newlines
-                    result = result.lstrip('\n').rstrip()
-                    break
-            else:
-                # No code block, try to find double newline
-                idx = result.find('\n\n')
+    max_iterations = 5  # Safety limit for nested headers
+    iterations = 0
+    
+    while iterations < max_iterations:
+        iterations += 1
+        found_prefix = False
+        
+        for prefix in METADATA_PREFIXES:
+            if result.startswith(prefix):
+                found_prefix = True
+                # Find the end of the metadata block (```json ... ``` or ``` ... ```)
+                idx = result.find('```')
                 if idx >= 0:
-                    result = result[idx + 2:].lstrip('\n').rstrip()
-                    break
+                    # Find closing ```
+                    end_idx = result.find('```', idx + 3)
+                    if end_idx >= 0:
+                        # Skip past the code block and any newlines
+                        result = result[end_idx + 3:]
+                        result = result.lstrip('\n').rstrip()
+                        break
                 else:
-                    # No recognized pattern, strip the prefix only
-                    result = result[len(prefix):].strip()
+                    # No code block, try to find double newline
+                    idx = result.find('\n\n')
+                    if idx >= 0:
+                        result = result[idx + 2:].lstrip('\n').rstrip()
+                        break
+                    else:
+                        # No recognized pattern, strip the prefix only
+                        result = result[len(prefix):].strip()
+                        break
+        
+        if not found_prefix:
+            # No more prefixes found, content is clean
+            break
     
     return result
 

@@ -305,18 +305,20 @@ def add_message(
     if timestamp is None:
         timestamp = datetime.now().isoformat()
     
-    cursor.execute("""
-        INSERT INTO conversations (sender, sender_label, content, channel, session_key, message_id, timestamp, is_sensitive)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (sender, sender_label, content, channel, session_key, message_id, timestamp, is_sensitive))
-    
-    # Deduplication guard: if same (sender, content, session_key) exists, keep only newest
-    # This prevents duplicate rows when same message is indexed multiple times
+    # Deduplication guard: if same (sender, content, session_key) exists, delete OLDEST first
+    # Then insert new row. This ensures "keep newest" behavior.
     if sender and content and session_key:
         cursor.execute("""
             DELETE FROM conversations 
-            WHERE sender = ? AND content = ? AND session_key = ? AND rowid < last_insert_rowid()
+            WHERE sender = ? AND content = ? AND session_key = ?
         """, (sender, content, session_key))
+    
+    # Use INSERT OR REPLACE to handle race conditions with unique index
+    # This replaces existing row if unique constraint is hit (shouldn't happen after DELETE above)
+    cursor.execute("""
+        INSERT OR REPLACE INTO conversations (sender, sender_label, content, channel, session_key, message_id, timestamp, is_sensitive)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (sender, sender_label, content, channel, session_key, message_id, timestamp, is_sensitive))
     
     row_id = cursor.lastrowid
     conn.commit()
