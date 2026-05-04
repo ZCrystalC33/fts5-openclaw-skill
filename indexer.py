@@ -212,11 +212,27 @@ def import_session_with_checkpoint(filepath: str, force: bool = False, state: Di
                         msg = event.get('message', {})
                         if msg.get('role') in ('user', 'assistant'):
                             msg_id = event.get('id')
+                            
+                            # Extract raw content for channel detection before stripping
+                            raw_content = ''
+                            content_list = msg.get('content', [])
+                            if isinstance(content_list, list):
+                                for item in content_list:
+                                    if isinstance(item, dict) and item.get('type') == 'text':
+                                        raw_content += item.get('text', '')
+                            
+                            # Infer channel: path-based first, then refine with content
+                            inferred_channel = infer_channel_from_filepath(filepath)
+                            
+                            # If path-based inference gives generic 'cli' but content has Telegram indicators,
+                            # prefer content-based detection for accuracy
+                            if inferred_channel == 'cli':
+                                content_detected = detect_channel_from_content(raw_content)
+                                if content_detected:
+                                    inferred_channel = content_detected
+                            
                             content = _extract_content(msg)
                             peer = msg.get('role')
-                            
-                            # Infer channel from filepath for accuracy
-                            inferred_channel = infer_channel_from_filepath(filepath)
                             
                             add_message(
                                 sender=peer,
@@ -316,6 +332,24 @@ def infer_channel_from_filepath(filepath: str) -> str:
     return 'cli'
 
 
+# Channel detection from message content (for Telegram etc.)
+def detect_channel_from_content(content: str) -> Optional[str]:
+    """
+    Detect channel from message content metadata.
+    
+    Telegram messages have chat_id like "telegram:559083286" in their metadata.
+    Returns 'telegram' if found, None otherwise.
+    """
+    if not content:
+        return None
+    # Look for telegram chat_id pattern
+    if '"chat_id"' in content and '"telegram:' in content:
+        return 'telegram'
+    if '"channel"' in content and '"telegram"' in content.lower():
+        return 'telegram'
+    return None
+
+
 def _extract_content(msg: Dict) -> str:
     """
     Extract content from message, stripping metadata headers.
@@ -323,6 +357,8 @@ def _extract_content(msg: Dict) -> str:
     Handles Telegram format:
     - 'Conversation info (untrusted metadata): ```json {...} ```\n\n[actual content]'
     - 'Sender (untrusted metadata): ```json {...} ```\n\n[actual content]'
+    
+    Also detects channel from content if not inferable from path.
     """
     content_list = msg.get('content', [])
     content = ""
